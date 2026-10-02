@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState, useTransition, type PointerEvent as RPointerEvent } from "react";
 import { adjacent } from "@/lib/geometry";
+import { PRIZEMLJE, PRIZEMLJE_HEIGHT } from "@/lib/layouts/prizemlje";
 import type { Floor } from "@/lib/floor";
 import type { Table } from "@/lib/reservations";
 import { fmtMin } from "@/lib/time";
@@ -428,7 +429,17 @@ function Editor(p: Props & { onDone: () => void }) {
   }, [placed, p.combine, p.joinDistance]);
 
   const upload = (f: FormData) => start(async () => {
-    const file = f.get("slika");
+    let file = f.get("slika");
+    if (file instanceof File && file.size && (file.type === "application/pdf" || /\.pdf$/i.test(file.name))) {
+      try {
+        file = await pdfToPng(file);
+        f.set("slika", file);
+      } catch (e) {
+        console.error("PDF tlocrt:", e);
+        setMsg({ error: "PDF se ne može pročitati. Spremi tlocrt kao sliku (PNG ili JPG) i pokušaj ponovno." });
+        return;
+      }
+    }
     if (file instanceof File && file.size) {
       const url = URL.createObjectURL(file);
       const img = new Image();
@@ -441,6 +452,18 @@ function Editor(p: Props & { onDone: () => void }) {
     }
     setMsg(await uploadFloorAction(f));
   });
+
+  // Zamjenjuje sve stolove predloškom za prizemlje (spremaju se tek na "Spremi tlocrt")
+  const loadTemplate = () => {
+    if (tables.length && !confirm(`Zamijeniti postojećih ${tables.length} stolova predloškom za prizemlje (${PRIZEMLJE.length} stolova)?`)) return;
+    setRemoved((r) => [...r, ...tables.filter((t) => t.id).map((t) => t.id!)]);
+    setTables(PRIZEMLJE.map((t) => ({
+      ...t, key: nextKey.current--, id: null, rot: 0, online: true, active: true,
+    })));
+    if (!p.floor.image) setHeight(PRIZEMLJE_HEIGHT);
+    setSelKey(null);
+    setDirty(true);
+  };
 
   const save = () => start(async () => {
     const r = await saveLayoutAction(tables.map(({ key: _k, ...t }) => t), removed, height);
@@ -461,7 +484,7 @@ function Editor(p: Props & { onDone: () => void }) {
         </div>
         <div className="toolbar" style={{ marginTop: 10 }}>
           <form action={upload} className="toolbar">
-            <input type="file" name="slika" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Slika tlocrta" style={{ maxWidth: 240 }} />
+            <input type="file" name="slika" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf,.pdf" aria-label="Slika tlocrta" style={{ maxWidth: 240 }} />
             <button className="small ghost" disabled={pending}>{p.floor.image ? "Zamijeni sliku" : "Učitaj sliku tlocrta"}</button>
           </form>
           {p.floor.image && (
@@ -473,6 +496,7 @@ function Editor(p: Props & { onDone: () => void }) {
             <input type="number" min={200} max={5000} step={10} value={height} style={{ width: 90 }}
               onChange={(e) => { setHeight(Number(e.target.value)); setDirty(true); }} />
           </label>
+          <button className="small ghost" onClick={loadTemplate}>Predložak: prizemlje ({PRIZEMLJE.length} stolova)</button>
           <label className="small fp-inline"><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Mreža</label>
         </div>
         {msg?.ok && <div className="msg ok small">{msg.ok}</div>}
@@ -562,4 +586,25 @@ function Editor(p: Props & { onDone: () => void }) {
       </div>
     </>
   );
+}
+
+// Prva stranica PDF-a (npr. arhitektonski tlocrt) pretvorena u PNG, u pregledniku.
+// Legacy build jer obični traži najnovije JS značajke koje mnogi preglednici još nemaju.
+async function pdfToPng(file: File): Promise<File> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/legacy/build/pdf.worker.min.mjs", import.meta.url).toString();
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const page = await doc.getPage(1);
+  const base = page.getViewport({ scale: 1 });
+  const viewport = page.getViewport({ scale: Math.min(4, 2400 / base.width) });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+  const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, "image/png"));
+  if (!blob) throw new Error("PDF render");
+  return new File([blob], file.name.replace(/\.pdf$/i, ".png"), { type: "image/png" });
 }
