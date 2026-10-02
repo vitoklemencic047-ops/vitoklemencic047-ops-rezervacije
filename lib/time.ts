@@ -43,3 +43,12 @@ export function fmtDate(date: string): string {
   const [y, m, d] = date.split("-");
   return `${DAYS[weekday(date)]}, ${Number(d)}.${Number(m)}.${y}.`;
 }
+
+export const DAY_SHORT = ["ned", "pon", "uto", "sri", "čet", "pet", "sub"];
+export const MONTH_SHORT = ["sij", "velj", "ožu", "tra", "svi", "lip", "srp", "kol", "ruj", "lis", "stu", "pro"];
+
+// "sub, 4. lis"
+export function fmtShort(date: string): string {
+  const [, m, d] = date.split("-").map(Number);
+  return `${DAY_SHORT[weekday(date)]}, ${d}. ${MONTH_SHORT[m - 1]}`;
+}

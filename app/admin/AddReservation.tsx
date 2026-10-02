@@ -36,8 +36,8 @@ export default function AddReservation({ date, tables }: { date: string; tables:
       <div className="field"><label>Napomena</label><input name="napomena" /></div>
       <div className="toolbar">
         <button disabled={pending}>Upiši rezervaciju</button>
-        <label style={{ display: "flex", gap: 6, alignItems: "center", margin: 0 }}>
-          <input type="checkbox" name="posalji" value="1" defaultChecked style={{ width: "auto" }} /> Pošalji potvrdu e-mailom
+        <label style={{ display: "flex", gap: 8, alignItems: "center", margin: 0, fontSize: 14 }}>
+          <input type="checkbox" name="posalji" value="1" defaultChecked /> Pošalji potvrdu e-mailom
         </label>
       </div>
       {state?.error && <div className="msg bad">{state.error}</div>}
