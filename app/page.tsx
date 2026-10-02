@@ -2,6 +2,8 @@ import { db, getSettings } from "@/lib/db";
 import { addDays, fmtMin, nowIn, weekday } from "@/lib/time";
 import { Icon } from "./icons";
 import BookingForm from "./BookingForm";
+import ChatWidget from "./ChatWidget";
+import { assistantEnabled } from "@/lib/assistant";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +51,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ d
         />
         <p className="foot">Za grupe veće od {s.max_party_online} osoba nazovite nas na {s.phone}.</p>
       </section>
+      {assistantEnabled() && <ChatWidget restaurant={s.restaurant_name} />}
     </main>
   );
 }

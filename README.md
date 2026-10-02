@@ -8,6 +8,7 @@ Sustav za online rezervacije stolova u restoranu: javna stranica za goste, admin
 - **Pametna dodjela stolova**: sustav sam bira najmanji slobodan stol koji odgovara grupi, uz trajanje obroka (90/120 min) i vrijeme pospremanja. Provjera i upis su u jednoj transakciji, pa nema dvostrukih rezervacija.
 - **Lista čekanja**: kad je dan pun, gost se upiše; čim netko otkaže, gosti s liste dobiju e-mail.
 - **Podsjetnici**: e-mail, SMS i/ili WhatsApp 24 h i 2 h prije dolaska (oba vremena i kanali se mijenjaju u postavkama). Gost u podsjetniku jednim klikom potvrđuje dolazak ili otkazuje, a admin vidi tko je potvrdio.
+- **AI asistent**: chat na javnoj stranici i WhatsApp. Gost napiše "stol za 4 u subotu oko 20h", asistent provjeri slobodne termine, predloži vrijeme, pita što nedostaje, ponovi detalje i nakon potvrde sam upiše rezervaciju (s e-mail potvrdom). Kad je pun dan, nudi listu čekanja. Na WhatsAppu gost vidi i otkazuje svoje rezervacije.
 - **Admin panel** (`/admin`): vremenski raspored po stolovima, popis dana, statusi (stigli, otišli, nisu došli, otkazano), unos telefonskih i walk-in rezervacija, ručni odabir stola.
 - **Postavke** (`/admin/postavke`): radno vrijeme (više smjena po danu), neradni dani, stolovi (kapacitet, samo-telefonski stolovi), trajanja, pravila online rezervacija.
 
@@ -27,6 +28,14 @@ SMS i WhatsApp idu preko Twilija: upiši `TWILIO_*` u `.env.local` (za WhatsApp 
 Na platformama bez stalnog procesa (npr. Vercel) postavi `DISABLE_REMINDER_LOOP=1` i cron koji svakih 5–15 minuta poziva
 `GET https://tvoja-domena/api/cron/podsjetnici?key=CRON_SECRET`.
 
+### AI asistent
+
+Upiši `ANTHROPIC_API_KEY` (Claude API ključ s console.anthropic.com) i na javnoj stranici se pojavi gumb "Rezerviraj u chatu".
+Asistent koristi model Claude Opus 5.5; razgovori se čuvaju u bazi (`conversations`).
+
+WhatsApp: u Twilio konzoli za WhatsApp pošiljatelja postavi "A message comes in" na
+`https://tvoja-domena/api/whatsapp` (POST). Potrebni su `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` i točan `APP_URL` (koristi se za provjeru Twilio potpisa).
+
 ## API
 
 | Metoda | Putanja | Opis |
@@ -35,11 +44,13 @@ Na platformama bez stalnog procesa (npr. Vercel) postavi `DISABLE_REMINDER_LOOP=
 | POST | `/api/rezervacije` | `{datum, min, osobe, ime, email, telefon, napomena}` |
 | POST | `/api/lista-cekanja` | `{datum, osobe, ime, email, telefon}` |
 | GET | `/api/cron/podsjetnici?key=…` | šalje podsjetnike |
+| POST | `/api/asistent` | `{razgovor?, poruka}` → `{razgovor, odgovor}` (chat) |
+| POST | `/api/whatsapp` | Twilio WhatsApp webhook |
 
 ## Sljedeće faze
 
 1. Widget za ugradnju na postojeću stranicu
 2. Depozit ili kartica za garanciju (Stripe), naknada za no-show
 3. Google Calendar sinkronizacija, Google "Reserve" integracija
-4. AI asistent koji prima rezervacije putem chata, e-maila i telefona
+4. AI asistent i za e-mail i telefonske pozive
 5. Analitika: popunjenost po danima i satima, no-show stopa, stalni gosti

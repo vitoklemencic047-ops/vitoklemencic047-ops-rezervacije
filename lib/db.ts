@@ -78,6 +78,20 @@ function migrate(db: Database.Database) {
     );
   `);
 
+  // Razgovori AI asistenta (chat na stranici, WhatsApp). messages = puna povijest za Claude API.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      id TEXT PRIMARY KEY,
+      channel TEXT NOT NULL,
+      phone TEXT,
+      messages TEXT NOT NULL DEFAULT '[]',
+      user_turns INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS conversations_phone ON conversations(phone, updated_at);
+  `);
+
   // Stupci dodani nakon prve verzije
   const cols = new Set((db.prepare("PRAGMA table_info(reservations)").all() as { name: string }[]).map((c) => c.name));
   if (!cols.has("reminder2_sent")) db.exec("ALTER TABLE reservations ADD COLUMN reminder2_sent INTEGER NOT NULL DEFAULT 0");
