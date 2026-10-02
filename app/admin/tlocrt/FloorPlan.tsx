@@ -106,7 +106,8 @@ function TableShape({ t, className, onPointerDown, onClick, children }: {
 }
 
 function Label({ t, lines }: { t: { x: number | null; y: number | null; w: number; h: number }; lines: (string | null)[] }) {
-  const shown = lines.filter(Boolean) as string[];
+  // Na malim stolovima drugi redak ne stane; status se vidi po boji, detalji u oblačiću
+  const shown = (t.w < 50 ? lines.slice(0, 1) : lines).filter(Boolean) as string[];
   const cx = (t.x ?? 0) + t.w / 2, cy = (t.y ?? 0) + t.h / 2;
   return (
     <text className="ft-label" x={cx} y={cy - ((shown.length - 1) * 15) / 2} textAnchor="middle" dominantBaseline="middle">
