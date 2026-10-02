@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getSettings } from "@/lib/db";
-import { getByToken } from "@/lib/reservations";
+import { confirmAttendance, getByToken } from "@/lib/reservations";
 import { cancelReservation } from "@/lib/cancel";
 import { fmtDate, fmtMin, nowIn } from "@/lib/time";
 
@@ -29,6 +29,13 @@ export default async function ReservationPage({
     redirect(`/r/${token}`);
   }
 
+  async function confirm() {
+    "use server";
+    const current = getByToken(token);
+    if (current && current.status === "confirmed") confirmAttendance(current.id);
+    redirect(`/r/${token}`);
+  }
+
   return (
     <main className="wrap">
       <h1>{s.restaurant_name}</h1>
@@ -44,10 +51,14 @@ export default async function ReservationPage({
           {r.party_size} {r.party_size === 1 ? "osoba" : "osobe/a"} · na ime {r.name}
         </p>
         {r.note && <p className="muted">Napomena: {r.note}</p>}
+        {canCancel && r.guest_confirmed_at && <div className="msg ok">Hvala, potvrdili ste dolazak. Vidimo se!</div>}
         {canCancel && (
-          <form action={cancel} style={{ marginTop: 16 }}>
-            <button className="ghost">Otkaži rezervaciju</button>
-          </form>
+          <div className="toolbar" style={{ marginTop: 16 }}>
+            {!r.guest_confirmed_at && (
+              <form action={confirm}><button>Potvrđujem dolazak</button></form>
+            )}
+            <form action={cancel}><button className="ghost">Otkaži rezervaciju</button></form>
+          </div>
         )}
       </div>
       <p className="muted" style={{ marginTop: 16 }}>

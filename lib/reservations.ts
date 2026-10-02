@@ -10,7 +10,7 @@ export type Reservation = {
   id: number; token: string; date: string; start_min: number; duration_min: number;
   party_size: number; table_id: number | null; name: string; email: string | null;
   phone: string | null; note: string | null; source: string; status: Status;
-  reminder_sent: number; created_at: string;
+  reminder_sent: number; reminder2_sent: number; guest_confirmed_at: string | null; created_at: string;
 };
 
 export type Status = "confirmed" | "seated" | "completed" | "cancelled" | "no_show";
@@ -133,7 +133,11 @@ export function createReservation(input: NewReservation, mode: Mode & { source: 
         token, input.date, input.start_min, duration, input.party_size, tableId,
         input.name, input.email || null, input.phone || null, input.note || null, mode.source,
       );
-    return getReservation(Number(info.lastInsertRowid))!;
+    const id = Number(info.lastInsertRowid);
+    // Podsjetnik čiji je trenutak već prošao (rezervacija u zadnji čas) se ne šalje
+    const until = minutesUntil(input, s.timezone);
+    markReminders(id, until <= s.reminder1_hours * 60, until <= s.reminder2_hours * 60);
+    return getReservation(id)!;
   });
   return tx.immediate();
 }
@@ -181,23 +185,32 @@ export function markWaitlistNotified(id: number) {
   db().prepare("UPDATE waitlist SET notified = 1 WHERE id = ?").run(id);
 }
 
-// Potvrđene rezervacije koje počinju u sljedećih `hours` sati, a podsjetnik još nije poslan
-export function dueReminders(hours: number): Reservation[] {
-  const s = getSettings();
-  const now = nowIn(s.timezone);
-  const nowAbs = Date.parse(now.date + "T00:00:00Z") / 60000 + now.min;
-  const rows = db()
-    .prepare(
-      `SELECT * FROM reservations WHERE status = 'confirmed' AND reminder_sent = 0 AND email IS NOT NULL
-       AND date BETWEEN ? AND ?`,
-    )
-    .all(now.date, addDays(now.date, Math.ceil(hours / 24) + 1)) as Reservation[];
-  return rows.filter((r) => {
-    const abs = Date.parse(r.date + "T00:00:00Z") / 60000 + r.start_min;
-    return abs > nowAbs && abs - nowAbs <= hours * 60;
-  });
+// Minute od sada do početka rezervacije (u vremenu restorana)
+export function minutesUntil(r: { date: string; start_min: number }, timeZone: string): number {
+  const now = nowIn(timeZone);
+  const abs = (date: string, min: number) => Date.parse(date + "T00:00:00Z") / 60000 + min;
+  return abs(r.date, r.start_min) - abs(now.date, now.min);
 }
 
-export function markReminderSent(id: number) {
-  db().prepare("UPDATE reservations SET reminder_sent = 1 WHERE id = ?").run(id);
+// Potvrđene buduće rezervacije kojima još nije poslan neki od podsjetnika
+export function pendingReminders(): Reservation[] {
+  const s = getSettings();
+  const today = nowIn(s.timezone).date;
+  const horizon = Math.ceil(Math.max(s.reminder1_hours, s.reminder2_hours) / 24) + 1;
+  return db()
+    .prepare(
+      `SELECT * FROM reservations WHERE status = 'confirmed' AND (reminder_sent = 0 OR reminder2_sent = 0)
+       AND date BETWEEN ? AND ?`,
+    )
+    .all(today, addDays(today, horizon)) as Reservation[];
+}
+
+export function markReminders(id: number, first: boolean, second: boolean) {
+  db()
+    .prepare("UPDATE reservations SET reminder_sent = MAX(reminder_sent, ?), reminder2_sent = MAX(reminder2_sent, ?) WHERE id = ?")
+    .run(first ? 1 : 0, second ? 1 : 0, id);
+}
+
+export function confirmAttendance(id: number) {
+  db().prepare("UPDATE reservations SET guest_confirmed_at = datetime('now') WHERE id = ? AND guest_confirmed_at IS NULL").run(id);
 }

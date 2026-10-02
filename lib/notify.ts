@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import { getSettings } from "./db";
 import type { Reservation } from "./reservations";
+import { normalizePhone, sendMessage } from "./sms";
 import { fmtDate, fmtMin } from "./time";
 
 const appUrl = () => process.env.APP_URL ?? "http://localhost:3000";
@@ -42,14 +43,36 @@ export function sendConfirmation(r: Reservation) {
   );
 }
 
-export function sendReminder(r: Reservation) {
+// Podsjetnik se šalje na sve uključene kanale; vraća kanale na koje je stvarno otišao
+export async function sendReminder(r: Reservation, hoursBefore: number): Promise<string[]> {
   const s = getSettings();
-  return safeSend(
-    r.email,
-    `Podsjetnik: rezervacija u ${s.restaurant_name}`,
-    `Poštovani/a ${r.name},\n\npodsjećamo vas na rezervaciju: ${details(r)}.\n\n` +
-      `Ako ne možete doći, molimo otkažite ovdje kako bi stol dobio netko drugi:\n${appUrl()}/r/${r.token}`,
-  );
+  const channels = s.reminder_channels.split(",").map((c) => c.trim().toLowerCase());
+  const when = hoursBefore <= 3 ? `danas u ${fmtMin(r.start_min)}` : `${fmtDate(r.date)} u ${fmtMin(r.start_min)}`;
+  const link = `${appUrl()}/r/${r.token}`;
+  const sent: string[] = [];
+
+  if (channels.includes("email") && r.email) {
+    await safeSend(
+      r.email,
+      `Podsjetnik: rezervacija u ${s.restaurant_name}`,
+      `Poštovani/a ${r.name},\n\npodsjećamo vas na rezervaciju: ${details(r)}.\n\n` +
+        `Potvrdite dolazak ili otkažite jednim klikom:\n${link}\n\nAko ne možete doći, otkažite kako bi stol dobio netko drugi.`,
+    );
+    sent.push("email");
+  }
+
+  const phone = r.phone ? normalizePhone(r.phone, s.country_code) : null;
+  const text = `${s.restaurant_name}: podsjetnik na rezervaciju ${when}, ${r.party_size} os. Potvrdi ili otkaži: ${link}`;
+  for (const ch of ["whatsapp", "sms"] as const) {
+    if (!channels.includes(ch) || !phone) continue;
+    try {
+      await sendMessage(ch, phone, text);
+      sent.push(ch);
+    } catch (e) {
+      console.error(`Slanje (${ch}) nije uspjelo:`, e);
+    }
+  }
+  return sent;
 }
 
 export function sendCancellation(r: Reservation) {

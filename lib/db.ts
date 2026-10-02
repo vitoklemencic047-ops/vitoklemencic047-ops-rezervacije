@@ -78,6 +78,11 @@ function migrate(db: Database.Database) {
     );
   `);
 
+  // Stupci dodani nakon prve verzije
+  const cols = new Set((db.prepare("PRAGMA table_info(reservations)").all() as { name: string }[]).map((c) => c.name));
+  if (!cols.has("reminder2_sent")) db.exec("ALTER TABLE reservations ADD COLUMN reminder2_sent INTEGER NOT NULL DEFAULT 0");
+  if (!cols.has("guest_confirmed_at")) db.exec("ALTER TABLE reservations ADD COLUMN guest_confirmed_at TEXT");
+
   const empty = db.prepare("SELECT COUNT(*) AS n FROM settings").get() as { n: number };
   if (empty.n === 0) seed(db);
 }
@@ -108,6 +113,10 @@ export const DEFAULT_SETTINGS = {
   max_party_online: 8,    // veće grupe moraju nazvati
   phone: "+385 1 234 5678",
   timezone: "Europe/Zagreb",
+  reminder1_hours: 24,          // prvi podsjetnik, sati prije dolaska (0 = isključeno)
+  reminder2_hours: 2,           // drugi podsjetnik, sati prije dolaska (0 = isključeno)
+  reminder_channels: "email,sms", // email, sms, whatsapp (odvojeno zarezom)
+  country_code: "385",          // pozivni broj za brojeve upisane bez njega (091…)
 };
 
 export type Settings = typeof DEFAULT_SETTINGS;

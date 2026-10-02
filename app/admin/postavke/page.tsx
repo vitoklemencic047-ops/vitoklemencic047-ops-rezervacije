@@ -18,6 +18,10 @@ const LABELS: Record<string, string> = {
   min_notice: "Najkasnije unaprijed (min)",
   max_days_ahead: "Najviše dana unaprijed",
   max_party_online: "Najveća grupa online",
+  reminder1_hours: "1. podsjetnik, sati prije (0 = isklj.)",
+  reminder2_hours: "2. podsjetnik, sati prije (0 = isklj.)",
+  reminder_channels: "Kanali podsjetnika (email, sms, whatsapp)",
+  country_code: "Pozivni broj države",
 };
 
 export default async function SettingsPage() {

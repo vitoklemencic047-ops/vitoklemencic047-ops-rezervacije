@@ -106,7 +106,13 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
                   <td>{r.party_size}</td>
                   <td>{r.table_name ?? "—"}</td>
                   <td className="hide-sm">{r.phone}<div className="muted">{r.email}</div></td>
-                  <td><span className={`badge b-${r.status}`}>{STATUS[r.status]}</span></td>
+                  <td>
+                    <span className={`badge b-${r.status}`}>{STATUS[r.status]}</span>
+                    {r.status === "confirmed" && r.guest_confirmed_at && <div className="muted" style={{ fontSize: 12 }}>✓ gost potvrdio dolazak</div>}
+                    {r.status === "confirmed" && !r.guest_confirmed_at && (r.reminder_sent || r.reminder2_sent) ? (
+                      <div className="muted" style={{ fontSize: 12 }}>podsjetnik poslan</div>
+                    ) : null}
+                  </td>
                   <td>
                     <div className="toolbar">
                       {r.status === "confirmed" && <StatusButton id={r.id} status="seated" label="Stigli" />}
