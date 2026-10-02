@@ -1,9 +1,12 @@
 import crypto from "node:crypto";
 import { db, getSettings, type Settings } from "./db";
+import { busyByTable, findSeat, isFree, seatingContext, setTables } from "./seating";
 import { addDays, nowIn, weekday } from "./time";
 
 export type Table = {
   id: number; name: string; min_seats: number; max_seats: number; online: number; active: number;
+  x: number | null; y: number | null; w: number; h: number; rot: number;
+  shape: "rect" | "round"; zone: string; combinable: number;
 };
 
 export type Reservation = {
@@ -11,6 +14,7 @@ export type Reservation = {
   party_size: number; table_id: number | null; name: string; email: string | null;
   phone: string | null; note: string | null; source: string; status: Status;
   reminder_sent: number; reminder2_sent: number; guest_confirmed_at: string | null; created_at: string;
+  external_source: string | null; external_id: string | null; table_locked: number;
 };
 
 export type Status = "confirmed" | "seated" | "completed" | "cancelled" | "no_show";
@@ -32,37 +36,8 @@ function shifts(date: string): { open_min: number; close_min: number }[] {
     .all(weekday(date)) as { open_min: number; close_min: number }[];
 }
 
-function candidateTables(party: number, mode: Mode): Table[] {
-  return db()
-    .prepare(
-      `SELECT * FROM tables WHERE active = 1 AND min_seats <= ? AND max_seats >= ? ${mode.online ? "AND online = 1" : ""}
-       ORDER BY max_seats, id`,
-    )
-    .all(party, party) as Table[];
-}
-
-function busyByTable(date: string): Map<number, { start: number; end: number }[]> {
-  const rows = db()
-    .prepare(
-      `SELECT table_id, start_min, duration_min FROM reservations
-       WHERE date = ? AND table_id IS NOT NULL AND status IN ('confirmed', 'seated')`,
-    )
-    .all(date) as { table_id: number; start_min: number; duration_min: number }[];
-  const map = new Map<number, { start: number; end: number }[]>();
-  for (const r of rows) {
-    const list = map.get(r.table_id) ?? [];
-    list.push({ start: r.start_min, end: r.start_min + r.duration_min });
-    map.set(r.table_id, list);
-  }
-  return map;
-}
-
-function isFree(busy: { start: number; end: number }[] | undefined, start: number, end: number, buffer: number) {
-  return !(busy ?? []).some((b) => start < b.end + buffer && b.start < end + buffer);
-}
-
-// Termini u kojima postoji barem jedan slobodan stol; uz svaki termin i najbolji stol (najmanji koji odgovara).
-export function availableSlots(date: string, party: number, mode: Mode): { start_min: number; table_id: number }[] {
+// Termini u kojima ima mjesta za grupu; uz svaki termin i najbolji stol (ili spojeni stolovi).
+export function availableSlots(date: string, party: number, mode: Mode): { start_min: number; table_ids: number[] }[] {
   const s = getSettings();
   if (party < 1) return [];
   if (mode.online) {
@@ -72,15 +47,15 @@ export function availableSlots(date: string, party: number, mode: Mode): { start
   }
   const now = nowIn(s.timezone);
   const duration = durationFor(party, s);
-  const tables = candidateTables(party, mode);
+  const ctx = seatingContext(mode);
   const busy = busyByTable(date);
-  const slots: { start_min: number; table_id: number }[] = [];
+  const slots: { start_min: number; table_ids: number[] }[] = [];
 
   for (const shift of shifts(date)) {
     for (let t = shift.open_min; t + duration <= shift.close_min; t += s.slot_interval) {
       if (mode.online && date === now.date && t < now.min + s.min_notice) continue;
-      const table = tables.find((tb) => isFree(busy.get(tb.id), t, t + duration, s.buffer));
-      if (table) slots.push({ start_min: t, table_id: table.id });
+      const seat = findSeat(ctx, busy, party, t, t + duration, s);
+      if (seat) slots.push({ start_min: t, table_ids: seat.map((tb) => tb.id) });
     }
   }
   return slots;
@@ -96,7 +71,7 @@ export type NewReservation = {
 export function createReservation(input: NewReservation, mode: Mode & { source: string }): Reservation {
   const tx = db().transaction(() => {
     const s = getSettings();
-    let tableId: number | null;
+    let tableIds: number[];
     let duration = input.duration_min ?? durationFor(input.party_size, s);
 
     if (input.email) {
@@ -115,11 +90,11 @@ export function createReservation(input: NewReservation, mode: Mode & { source: 
       if (!isFree(busy, input.start_min, input.start_min + duration, s.buffer)) {
         throw new BookingError("Taj stol je zauzet u odabrano vrijeme.");
       }
-      tableId = input.table_id;
+      tableIds = [input.table_id];
     } else {
       const slot = availableSlots(input.date, input.party_size, mode).find((x) => x.start_min === input.start_min);
       if (!slot) throw new BookingError("Nažalost, taj termin više nije slobodan. Odaberite drugi.");
-      tableId = slot.table_id;
+      tableIds = slot.table_ids;
       duration = durationFor(input.party_size, s);
     }
 
@@ -130,10 +105,11 @@ export function createReservation(input: NewReservation, mode: Mode & { source: 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
-        token, input.date, input.start_min, duration, input.party_size, tableId,
+        token, input.date, input.start_min, duration, input.party_size, null,
         input.name, input.email || null, input.phone || null, input.note || null, mode.source,
       );
     const id = Number(info.lastInsertRowid);
+    setTables(id, tableIds, input.table_id != null);
     // Podsjetnik čiji je trenutak već prošao (rezervacija u zadnji čas) se ne šalje
     const until = minutesUntil(input, s.timezone);
     markReminders(id, until <= s.reminder1_hours * 60, until <= s.reminder2_hours * 60);
@@ -154,13 +130,21 @@ export function setStatus(id: number, status: Status) {
   db().prepare("UPDATE reservations SET status = ? WHERE id = ?").run(status, id);
 }
 
-export function listForDate(date: string): (Reservation & { table_name: string | null })[] {
-  return db()
+export type DayReservation = Reservation & { table_name: string | null; table_ids: number[] };
+
+// table_name je npr. "Stol 3 + Stol 4" kad je grupa za spojenim stolovima
+export function listForDate(date: string): DayReservation[] {
+  const rows = db()
     .prepare(
-      `SELECT r.*, t.name AS table_name FROM reservations r LEFT JOIN tables t ON t.id = r.table_id
-       WHERE r.date = ? ORDER BY r.start_min, r.id`,
+      `SELECT r.*, (SELECT group_concat(table_id) FROM reservation_tables WHERE reservation_id = r.id) AS extra
+       FROM reservations r WHERE r.date = ? ORDER BY r.start_min, r.id`,
     )
-    .all(date) as (Reservation & { table_name: string | null })[];
+    .all(date) as (Reservation & { extra: string | null })[];
+  const names = new Map(listTables().map((t) => [t.id, t.name]));
+  return rows.map(({ extra, ...r }) => {
+    const ids = r.table_id ? [r.table_id, ...(extra ? extra.split(",").map(Number) : [])] : [];
+    return { ...r, table_ids: ids, table_name: ids.length ? ids.map((i) => names.get(i) ?? `#${i}`).join(" + ") : null };
+  });
 }
 
 export function listTables(): Table[] {
