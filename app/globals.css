@@ -384,3 +384,64 @@ button:disabled { opacity: .5; cursor: default; transform: none; }
   .chat-fab span { display: none; }
   .chat-fab { padding: 16px; }
 }
+
+/* Tlocrt */
+.fp-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.fp-layout > .card { margin-top: 16px; }
+.fp-main { padding: 14px; outline: none; }
+.fp { display: block; width: 100%; height: auto; border-radius: 10px; touch-action: none; user-select: none; }
+.fp-bg { fill: var(--bg-2); }
+.fp-gridline { stroke: var(--line); stroke-width: 1; }
+.fp-time { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.fp-time b { font-variant-numeric: tabular-nums; min-width: 48px; }
+.fp-time input[type="range"] { flex: 1; padding: 0; border: 0; background: none; accent-color: var(--accent); }
+.ft .ft-top { stroke-width: 2; }
+.ft .ft-chair { fill: var(--card); stroke: var(--muted); stroke-width: 1.5; }
+.ft-label { font: 600 14px var(--font-body); fill: var(--text); pointer-events: none; }
+.ft-label .ft-sub { font-weight: 500; font-size: 12px; fill: var(--muted); }
+.ft.free .ft-top { fill: var(--card); stroke: var(--ok); }
+.ft.soon .ft-top { fill: var(--warn-soft); stroke: var(--warn); }
+.ft.busy .ft-top { fill: var(--accent-soft); stroke: var(--accent); }
+.ft.seated .ft-top { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 3; }
+.ft.clickable { cursor: pointer; }
+.ft.current .ft-top { stroke-dasharray: 6 4; stroke-width: 3; }
+.ft.picked .ft-top { stroke: var(--accent); stroke-width: 4; stroke-dasharray: none; }
+.ft.picked .ft-chair { stroke: var(--accent); }
+.ft.edit { cursor: grab; }
+.ft.edit .ft-top { fill: var(--card); stroke: var(--muted); }
+.ft.edit.selected .ft-top { stroke: var(--accent); stroke-width: 3; }
+.ft.edit.inactive { opacity: .4; }
+.fp-handle { fill: var(--accent); cursor: nwse-resize; }
+.fp-join { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; opacity: .35; pointer-events: none; }
+.fp-joinable { stroke: var(--gold); stroke-width: 2; stroke-dasharray: 4 5; pointer-events: none; }
+.fp-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.fp-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 2px solid; }
+.fp-legend .free { border-color: var(--ok); background: var(--card); }
+.fp-legend .soon { border-color: var(--warn); background: var(--warn-soft); }
+.fp-legend .busy { border-color: var(--accent); background: var(--accent-soft); }
+.fp-legend .seated { border-color: var(--ok); background: var(--ok-soft); }
+.fp-side { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
+.fp-side .msg { margin-top: 10px; }
+.fp-list { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.fp-item {
+  display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%;
+  background: transparent; color: var(--text); border: 1px solid var(--line); padding: 8px 10px; border-radius: 10px; font-weight: 400;
+}
+.fp-item:hover { background: var(--bg-2); border-color: var(--line); }
+.fp-item.on { border-color: var(--accent); background: var(--accent-soft); }
+.fp-item.warn { border-color: var(--bad); }
+.fp-item-time { font-weight: 700; font-variant-numeric: tabular-nums; }
+.fp-item-main { flex: 1; min-width: 0; font-size: 14px; }
+.fp-tools .spacer { flex: 1; }
+.fp-inline { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.fp-inline input[type="range"] { width: 110px; padding: 0; border: 0; background: none; }
+.fp-check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 6px 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.row2 .field { margin-bottom: 10px; }
+button.danger { color: var(--bad); }
+.fp-code { background: var(--bg-2); padding: 12px; border-radius: 10px; font-size: 13px; overflow-x: auto; margin: 8px 0 0; }
+@media (max-width: 860px) {
+  .fp-layout { grid-template-columns: minmax(0, 1fr); }
+  .datenav { flex-wrap: wrap; }
+  .fp-side { position: static; max-height: none; }
+}

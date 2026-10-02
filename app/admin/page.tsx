@@ -53,6 +53,12 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
             {date !== today && <Link className="btn ghost" href="/admin">Danas</Link>}
           </div>
         </div>
+        {active.some((r) => r.status === "confirmed" && r.table_ids.length === 0) && (
+          <div className="msg bad">
+            Neke rezervacije nemaju stol: {active.filter((r) => r.status === "confirmed" && r.table_ids.length === 0).map((r) => `${fmtMin(r.start_min)} ${r.name}`).join(", ")}.{" "}
+            <Link href={`/admin/tlocrt?datum=${date}`}>Smjesti ih na tlocrtu</Link>
+          </div>
+        )}
         {closed && <div className="msg warn">Restoran je zatvoren ovaj dan{closed.reason ? `: ${closed.reason}` : ""}.</div>}
 
         <div className="stats">
@@ -63,7 +69,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
           <div className="stat"><div className="stat-icon bad"><Icon name="x" /></div><div><b>{all.filter((r) => r.status === "no_show").length}</b><span>nije došlo</span></div></div>
         </div>
 
-        <h2>Raspored stolova</h2>
+        <h2 style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>Raspored stolova <Link className="small" href={`/admin/tlocrt?datum=${date}`} style={{ fontFamily: "var(--font-body)", fontWeight: 500 }}>Prikaži na tlocrtu</Link></h2>
         <div className="card timeline" style={{ ["--hour" as string]: `${100 / ((to - from) / 60)}%` }}>
           <div className="tl">
             <div className="tl-hours">
@@ -79,7 +85,7 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
               <div className="tl-row" key={t.id}>
                 <div className="tl-name">{t.name} <small>· {t.max_seats}</small></div>
                 <div className="tl-track">
-                  {active.filter((r) => r.table_id === t.id && r.status !== "no_show").map((r) => (
+                  {active.filter((r) => r.table_ids.includes(t.id) && r.status !== "no_show").map((r) => (
                     <div key={r.id} className={`tl-block ${r.status}`}
                       style={{ left: pct(r.start_min), width: `calc(${pct(r.start_min + r.duration_min)} - ${pct(r.start_min)})` }}
                       title={`${fmtMin(r.start_min)} ${r.name}, ${r.party_size} os.`}>

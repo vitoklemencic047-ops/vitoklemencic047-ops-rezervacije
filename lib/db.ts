@@ -96,6 +96,37 @@ function migrate(db: Database.Database) {
   const cols = new Set((db.prepare("PRAGMA table_info(reservations)").all() as { name: string }[]).map((c) => c.name));
   if (!cols.has("reminder2_sent")) db.exec("ALTER TABLE reservations ADD COLUMN reminder2_sent INTEGER NOT NULL DEFAULT 0");
   if (!cols.has("guest_confirmed_at")) db.exec("ALTER TABLE reservations ADD COLUMN guest_confirmed_at TEXT");
+  // Vanjske rezervacije (uvoz): izvor + njihov ID, da isti upis ne uđe dvaput
+  if (!cols.has("external_source")) db.exec("ALTER TABLE reservations ADD COLUMN external_source TEXT");
+  if (!cols.has("external_id")) db.exec("ALTER TABLE reservations ADD COLUMN external_id TEXT");
+  // 1 = stol je ručno odabran, automatski raspored ga ne mijenja
+  if (!cols.has("table_locked")) db.exec("ALTER TABLE reservations ADD COLUMN table_locked INTEGER NOT NULL DEFAULT 0");
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS reservations_external
+      ON reservations(external_source, external_id) WHERE external_id IS NOT NULL;
+
+    -- Dodatni stolovi kad je grupa smještena za spojene stolove (glavni stol je reservations.table_id)
+    CREATE TABLE IF NOT EXISTS reservation_tables (
+      reservation_id INTEGER NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
+      table_id INTEGER NOT NULL REFERENCES tables(id),
+      PRIMARY KEY (reservation_id, table_id)
+    );
+  `);
+
+  // Tlocrt: položaj i oblik stola. Koordinate su u jedinicama tlocrta (širina tlocrta = 1000).
+  const tcols = new Set((db.prepare("PRAGMA table_info(tables)").all() as { name: string }[]).map((c) => c.name));
+  if (!tcols.has("x")) {
+    db.exec(`
+      ALTER TABLE tables ADD COLUMN x REAL;
+      ALTER TABLE tables ADD COLUMN y REAL;
+      ALTER TABLE tables ADD COLUMN w REAL NOT NULL DEFAULT 70;
+      ALTER TABLE tables ADD COLUMN h REAL NOT NULL DEFAULT 70;
+      ALTER TABLE tables ADD COLUMN rot REAL NOT NULL DEFAULT 0;
+      ALTER TABLE tables ADD COLUMN shape TEXT NOT NULL DEFAULT 'rect';
+      ALTER TABLE tables ADD COLUMN zone TEXT NOT NULL DEFAULT '';
+      ALTER TABLE tables ADD COLUMN combinable INTEGER NOT NULL DEFAULT 1;
+    `);
+  }
 
   const empty = db.prepare("SELECT COUNT(*) AS n FROM settings").get() as { n: number };
   if (empty.n === 0) seed(db);
@@ -131,6 +162,8 @@ export const DEFAULT_SETTINGS = {
   reminder2_hours: 2,           // drugi podsjetnik, sati prije dolaska (0 = isključeno)
   reminder_channels: "email,sms", // email, sms, whatsapp (odvojeno zarezom)
   country_code: "385",          // pozivni broj za brojeve upisane bez njega (091…)
+  combine_tables: 1,            // 1 = veće grupe smiju sjesti za spojene susjedne stolove
+  join_distance: 25,            // najveći razmak (jedinice tlocrta) da se stolovi smatraju susjednima
 };
 
 export type Settings = typeof DEFAULT_SETTINGS;
